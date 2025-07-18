@@ -27,7 +27,7 @@ void ACController::begin() {
   _display.begin();
   _display.showInit();
 
-  Serial.begin(9600);
+  Serial.begin(115200);
 }
 
 float ACController::readNTC() {
