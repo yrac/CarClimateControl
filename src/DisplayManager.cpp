@@ -1,6 +1,6 @@
 #include "DisplayManager.h"
 
-DisplayManager::DisplayManager() : _display(2, 3) {}
+DisplayManager::DisplayManager() : _display(TM1637_CLK_PIN, TM1637_DIO_PIN) {}
 
 void DisplayManager::begin() {
   _display.setBrightness(7);

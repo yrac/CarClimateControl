@@ -1,5 +1,6 @@
 #pragma once
 #include "DisplayManager.h"
+#include "PinConfig.h"
 
 class ACController {
 public:

@@ -2,16 +2,6 @@
 #include <Arduino.h>
 #include <math.h>
 
-#define potPin A0
-#define ntcPin A1
-#define relayAC 8
-#define relayBlowerCut 7
-#define blowerSpeed4 6
-#define freezeBtnPin 5
-#define acRequestPin 9
-#define acPermissionPin 10
-#define bypassSwitchPin 11
-
 const float seriesResistor = 10000.0;
 const float nominalResistance = 10000.0;
 const float nominalTemp = 25.0;
@@ -21,18 +11,18 @@ const int adcMax = 1023;
 ACController::ACController(DisplayManager &display) : _display(display) {}
 
 void ACController::begin() {
-  pinMode(relayAC, OUTPUT);
-  pinMode(relayBlowerCut, OUTPUT);
-  pinMode(blowerSpeed4, OUTPUT);
-  pinMode(freezeBtnPin, INPUT_PULLUP);
-  pinMode(acRequestPin, OUTPUT);
-  pinMode(acPermissionPin, INPUT_PULLUP);
-  pinMode(bypassSwitchPin, INPUT_PULLUP);
+  pinMode(RELAY_AC_PIN, OUTPUT);
+  pinMode(BLOWER_CUT_PIN, OUTPUT);
+  pinMode(BLOWER_SPEED4_PIN, OUTPUT);
+  pinMode(FREEZE_BTN_PIN, INPUT_PULLUP);
+  pinMode(AC_REQUEST_PIN, OUTPUT);
+  pinMode(AC_PERMISSION_PIN, INPUT_PULLUP);
+  pinMode(BYPASS_SWITCH_PIN, INPUT_PULLUP);
 
-  digitalWrite(relayAC, HIGH);
-  digitalWrite(relayBlowerCut, LOW);
-  digitalWrite(blowerSpeed4, LOW);
-  digitalWrite(acRequestPin, HIGH);
+  digitalWrite(RELAY_AC_PIN, HIGH);
+  digitalWrite(BLOWER_CUT_PIN, LOW);
+  digitalWrite(BLOWER_SPEED4_PIN, LOW);
+  digitalWrite(AC_REQUEST_PIN, HIGH);
 
   _display.begin();
   _display.showInit();
@@ -41,7 +31,7 @@ void ACController::begin() {
 }
 
 float ACController::readNTC() {
-  int val = analogRead(ntcPin);
+  int val = analogRead(NTC_PIN);
   float voltage = val * (5.0 / adcMax);
   float resistance = (5.0 / voltage - 1.0) * seriesResistor;
   float tempK = 1.0 / (1.0 / (nominalTemp + 273.15) + log(resistance / nominalResistance) / bCoefficient);
@@ -49,7 +39,7 @@ float ACController::readNTC() {
 }
 
 float ACController::readSetpoint() {
-  return map(analogRead(potPin), 0, 1023, 50, 180) / 10.0;
+  return map(analogRead(POT_PIN), 0, 1023, 50, 180) / 10.0;
 }
 
 void ACController::update() {
@@ -57,7 +47,7 @@ void ACController::update() {
   float setpoint = readSetpoint();
   int evapInt = (int)evapTemp;
   int setInt = (int)setpoint;
-  int potRaw = analogRead(potPin);
+  int potRaw = analogRead(POT_PIN);
 
   if (abs(potRaw - lastPotRaw) > 5) {
     potMovedTime = millis();
@@ -65,7 +55,7 @@ void ACController::update() {
     lastPotRaw = potRaw;
   }
 
-  if (digitalRead(freezeBtnPin) == LOW && !freezeMode && !freezeDone) {
+  if (digitalRead(FREEZE_BTN_PIN) == LOW && !freezeMode && !freezeDone) {
     freezeMode = true;
     freezeDone = false;
   }
@@ -74,24 +64,24 @@ void ACController::update() {
   if (freezeMode) needAC = (evapTemp > -5.0);
   else if (!freezeDone) needAC = (evapTemp > setpoint + hysteresis);
 
-  digitalWrite(acRequestPin, needAC ? LOW : HIGH);
-  bool acPermission = digitalRead(acPermissionPin) == LOW;
-  bool bypassMode = digitalRead(bypassSwitchPin) == LOW;
+  digitalWrite(AC_REQUEST_PIN, needAC ? LOW : HIGH);
+  bool acPermission = digitalRead(AC_PERMISSION_PIN) == LOW;
+  bool bypassMode = digitalRead(BYPASS_SWITCH_PIN) == LOW;
 
-  if (needAC && (acPermission || bypassMode)) digitalWrite(relayAC, LOW);
-  else digitalWrite(relayAC, HIGH);
+  if (needAC && (acPermission || bypassMode)) digitalWrite(RELAY_AC_PIN, LOW);
+  else digitalWrite(RELAY_AC_PIN, HIGH);
 
   if (freezeMode) {
-    digitalWrite(relayBlowerCut, HIGH);
-    digitalWrite(blowerSpeed4, LOW);
+    digitalWrite(BLOWER_CUT_PIN, HIGH);
+    digitalWrite(BLOWER_SPEED4_PIN, LOW);
     if (evapTemp <= -5.0) {
       freezeMode = false;
       freezeDone = true;
-      digitalWrite(blowerSpeed4, HIGH);
+      digitalWrite(BLOWER_SPEED4_PIN, HIGH);
     }
   } else {
-    digitalWrite(relayBlowerCut, LOW);
-    digitalWrite(blowerSpeed4, LOW);
+    digitalWrite(BLOWER_CUT_PIN, LOW);
+    digitalWrite(BLOWER_SPEED4_PIN, LOW);
   }
 
   if (freezeMode) _display.showWord("COOL");
@@ -108,5 +98,5 @@ void ACController::update() {
   Serial.print(" | Req: "); Serial.print(needAC);
   Serial.print(" | Perm: "); Serial.print(acPermission);
   Serial.print(" | Bypass: "); Serial.print(bypassMode);
-  Serial.print(" | Comp: "); Serial.println(digitalRead(relayAC) == LOW ? "ON" : "OFF");
+  Serial.print(" | Comp: "); Serial.println(digitalRead(RELAY_AC_PIN) == LOW ? "ON" : "OFF");
 }
