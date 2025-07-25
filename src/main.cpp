@@ -1,13 +1,12 @@
-#include "DisplayManager.h"
+#include <Arduino.h>
 #include "ACController.h"
 
-DisplayManager display;
-ACController acController(display);
+ACController ac;
 
 void setup() {
-  acController.begin();
+  ac.begin();
 }
 
 void loop() {
-  acController.update();
+  ac.update();
 }

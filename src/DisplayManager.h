@@ -1,16 +1,16 @@
-#pragma once
+#ifndef DISPLAY_MANAGER_H
+#define DISPLAY_MANAGER_H
+
 #include <Arduino.h>
-#include <TM1637Display.h>
-#include "PinConfig.h"
+class SensorManager;
+class MenuSystem;
+class CompressorLogic;
 
 class DisplayManager {
 public:
-  DisplayManager();
   void begin();
   void showInit();
-  void showWord(const char* word);
-  void showTempWithC(int temp);
-
-private:
-  TM1637Display _display;
+  void update(SensorManager& sensors, MenuSystem& menu, CompressorLogic& logic);
 };
+
+#endif // DISPLAY_MANAGER_H
