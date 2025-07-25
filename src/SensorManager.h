@@ -5,8 +5,9 @@ class SensorManager {
 public:
   void begin();
   void update();
-  float getCurrentTemperature();
-  int getSetpoint();
+
+  float getEvapTemperature();   // Suhu aktual evaporator
+  float getTargetTemperature(); // Suhu yang diinginkan user
 };
 
-#endif // SENSOR_MANAGER_H
+#endif

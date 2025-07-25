@@ -2,15 +2,15 @@
 #define DISPLAY_MANAGER_H
 
 #include <Arduino.h>
-class SensorManager;
-class MenuSystem;
-class CompressorLogic;
 
 class DisplayManager {
 public:
   void begin();
-  void showInit();
-  void update(SensorManager& sensors, MenuSystem& menu, CompressorLogic& logic);
+  void update();
+
+  void showTemperature(float temp);     // Tampilkan suhu
+  void showWord(const char* word);      // Tampilkan teks pendek (seperti "WAIT", "CAL ")
+  void showOperationHour(uint16_t hour);
 };
 
-#endif // DISPLAY_MANAGER_H
+#endif

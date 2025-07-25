@@ -1,20 +1,35 @@
 #include "EEPROMManager.h"
 #include <EEPROM.h>
 
-const int ADDR_SETPOINT = 0;
+static ACConfig config;
 
 void EEPROMManager::begin() {
-  // Tidak perlu EEPROM.begin() pada Arduino Uno/Mega
-}
+  EEPROM.begin(sizeof(ACConfig));
+  EEPROM.get(0, config);
 
-void EEPROMManager::saveSetpoint(int value) {
-  EEPROM.write(ADDR_SETPOINT, value);
-}
-
-int EEPROMManager::loadSetpoint() {
-  int val = EEPROM.read(ADDR_SETPOINT);
-  if (val < 5 || val > 18) {
-    val = 10; // default
+  // Validasi sederhana
+  if (config.potMin == 0xFFFF || config.potMax == 0xFFFF || config.potMax < config.potMin) {
+    config.potMin = 0;
+    config.potMax = 1023;
+    config.bypassMode = false;
+    config.operationHours = 0;
+    save();
   }
-  return val;
+}
+
+void EEPROMManager::save() {
+  EEPROM.put(0, config);
+  EEPROM.commit();  // Untuk board berbasis ESP. Bisa diabaikan di board AVR.
+}
+
+void EEPROMManager::reset() {
+  config.bypassMode = false;
+  config.operationHours = 0;
+  config.potMin = 0;
+  config.potMax = 1023;
+  save();
+}
+
+ACConfig& EEPROMManager::getConfig() {
+  return config;
 }
