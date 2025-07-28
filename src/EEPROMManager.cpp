@@ -1,35 +1,22 @@
 #include "EEPROMManager.h"
 #include <EEPROM.h>
 
-static ACConfig config;
-
 void EEPROMManager::begin() {
-  EEPROM.begin(sizeof(ACConfig));
-  EEPROM.get(0, config);
-
-  // Validasi sederhana
-  if (config.potMin == 0xFFFF || config.potMax == 0xFFFF || config.potMax < config.potMin) {
-    config.potMin = 0;
-    config.potMax = 1023;
-    config.bypassMode = false;
-    config.operationHours = 0;
-    save();
-  }
+    // Kosong untuk sekarang (bisa ditambah validasi data)
 }
 
-void EEPROMManager::save() {
-  EEPROM.put(0, config);
-  EEPROM.commit();  // Untuk board berbasis ESP. Bisa diabaikan di board AVR.
+void EEPROMManager::saveCalibration(int lo, int hi) {
+    EEPROM.put(addrLo, lo);
+    EEPROM.put(addrHi, hi);
 }
 
-void EEPROMManager::reset() {
-  config.bypassMode = false;
-  config.operationHours = 0;
-  config.potMin = 0;
-  config.potMax = 1023;
-  save();
-}
+void EEPROMManager::loadCalibration(int &lo, int &hi) {
+    EEPROM.get(addrLo, lo);
+    EEPROM.get(addrHi, hi);
 
-ACConfig& EEPROMManager::getConfig() {
-  return config;
+    // Validasi sederhana
+    if (lo < 0 || lo > 1023 || hi < 0 || hi > 1023 || lo >= hi) {
+        lo = 0;
+        hi = 1023;
+    }
 }

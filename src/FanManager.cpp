@@ -1,51 +1,34 @@
 #include "FanManager.h"
-#include "PinConfig.h"
+#include <Arduino.h>
+
+FanManager::FanManager(int outputPin) {
+    _pin = outputPin;
+    _state = FAN_OFF;
+}
 
 void FanManager::begin() {
-  pinMode(PIN_FAN_RELAY_LOW, OUTPUT);
-  pinMode(PIN_FAN_RELAY_MED, OUTPUT);
-  pinMode(PIN_FAN_RELAY_HIGH, OUTPUT);
-  pinMode(PIN_FAN_BYPASS, OUTPUT);
-
-  digitalWrite(PIN_FAN_RELAY_LOW, HIGH);
-  digitalWrite(PIN_FAN_RELAY_MED, HIGH);
-  digitalWrite(PIN_FAN_RELAY_HIGH, HIGH);
-  digitalWrite(PIN_FAN_BYPASS, LOW);
+    pinMode(_pin, OUTPUT);
+    digitalWrite(_pin, LOW);
 }
 
-void FanManager::setMode(FanMode mode) {
-  currentMode = mode;
-
-  // Reset semua relays
-  digitalWrite(PIN_FAN_RELAY_LOW, HIGH);
-  digitalWrite(PIN_FAN_RELAY_MED, HIGH);
-  digitalWrite(PIN_FAN_RELAY_HIGH, HIGH);
-  digitalWrite(PIN_FAN_BYPASS, LOW);
-
-  switch (mode) {
-    case FAN_LOW:
-      digitalWrite(PIN_FAN_RELAY_LOW, LOW);
-      break;
-    case FAN_MED:
-      digitalWrite(PIN_FAN_RELAY_MED, LOW);
-      break;
-    case FAN_HIGH:
-      digitalWrite(PIN_FAN_RELAY_HIGH, LOW);
-      break;
-    case FAN_FULL:
-      digitalWrite(PIN_FAN_BYPASS, HIGH);
-      break;
-    case FAN_OFF:
-    default:
-      // Semua OFF
-      break;
-  }
+void FanManager::turnOn() {
+    digitalWrite(_pin, HIGH);
+    _state = FAN_ON;
 }
 
-void FanManager::update() {
-  // Tidak perlu timer atau sensor, hanya setMode()
+void FanManager::turnOff() {
+    digitalWrite(_pin, LOW);
+    _state = FAN_OFF;
 }
 
-FanMode FanManager::getMode() {
-  return currentMode;
+void FanManager::loop(bool compressorActive, bool fastCooling) {
+    if (compressorActive || fastCooling) {
+        turnOn();
+    } else {
+        turnOff();
+    }
+}
+
+FanState FanManager::getState() {
+    return _state;
 }

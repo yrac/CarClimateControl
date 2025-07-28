@@ -4,9 +4,10 @@
 ACController ac;
 
 void setup() {
-  ac.begin();
+    ac.begin();
 }
 
 void loop() {
-  ac.update();
+    ac.loop();
+    delay(10); // Hindari CPU 100%, cukup ringan
 }

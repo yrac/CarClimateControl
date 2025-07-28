@@ -1,85 +1,79 @@
 #include "MenuManager.h"
-#include "DisplayManager.h"
-#include "BuzzerManager.h"
-#include "CalibrationManager.h"
-#include "OperationHourManager.h"
-#include "EEPROMManager.h"
 
-extern DisplayManager display;
-extern BuzzerManager buzzer;
-extern CalibrationManager calibration;
-extern OperationHourManager opHour;
-extern EEPROMManager config;
-
-static MenuState currentMenu = MENU_NONE;
-static unsigned long menuStartTime = 0;
-
-#define MENU_TIMEOUT_MS 10000
-
-void MenuManager::begin() {}
-
-void MenuManager::handleButton(bool shortPress, bool longPress) {
-  if (longPress && currentMenu == MENU_NONE) {
-    currentMenu = MENU_CALIBRATE;
-    menuStartTime = millis();
-    buzzer.beep(BEEP_LONG);
-  } else if (shortPress && currentMenu != MENU_NONE) {
-    // Navigasi menu
-    buzzer.beep(BEEP_SHORT);
-    currentMenu = static_cast<MenuState>((currentMenu + 1) % (MENU_EXIT + 1));
-    menuStartTime = millis();
-  }
+MenuManager::MenuManager(int buttonPin) {
+    _pin = buttonPin;
+    _pressStart = 0;
+    _buttonStateLast = false;
+    _freezeTriggered = false;
+    _state = MENU_IDLE;
+    _loConfirmed = false;
+    _hiConfirmed = false;
 }
 
-void MenuManager::update() {
-  if (currentMenu == MENU_NONE) return;
+void MenuManager::begin() {
+    pinMode(_pin, INPUT_PULLUP);
+}
 
-  if (millis() - menuStartTime > MENU_TIMEOUT_MS) {
-    currentMenu = MENU_NONE;
-    buzzer.beep(BEEP_DOUBLE);
-    return;
-  }
+bool MenuManager::readButton() {
+    return digitalRead(_pin) == LOW;
+}
 
-  switch (currentMenu) {
-    case MENU_CALIBRATE:
-      display.showWord("CAL ");
-      calibration.begin();
-      break;
+void MenuManager::loop() {
+    bool buttonState = readButton();
 
-    case MENU_VIEW_OPH: {
-      int hour = opHour.getHour();
-      display.showNumber(hour);
-      break;
+    if (buttonState && !_buttonStateLast) {
+        // Button just pressed
+        _pressStart = millis();
+    } else if (!buttonState && _buttonStateLast) {
+        // Button just released
+        unsigned long pressDuration = millis() - _pressStart;
+
+        if (pressDuration < 1000) {
+            // Short press
+            if (_state == MENU_IDLE) {
+                _freezeTriggered = true;
+            } else if (_state == MENU_CAL_LO) {
+                _loConfirmed = true;
+                _state = MENU_CAL_HI;
+            } else if (_state == MENU_CAL_HI) {
+                _hiConfirmed = true;
+                _state = MENU_CAL_DONE;
+            }
+        } else if (pressDuration >= 1000) {
+            // Long press → Masuk mode kalibrasi
+            _state = MENU_CAL_LO;
+            _loConfirmed = false;
+            _hiConfirmed = false;
+        }
     }
 
-    case MENU_RESET_OPH:
-      display.showWord("RST ");
-      opHour.reset();
-      buzzer.beep(BEEP_DOUBLE);
-      break;
-
-    case MENU_BYPASS_TOGGLE:
-      config.getConfig().bypassMode = !config.getConfig().bypassMode;
-      config.save();
-      display.showWord(config.getConfig().bypassMode ? "BPON" : "BPOF");
-      buzzer.beep(BEEP_SHORT);
-      break;
-
-    case MENU_EXIT:
-      display.showWord("EXIT");
-      currentMenu = MENU_NONE;
-      buzzer.beep(BEEP_DOUBLE);
-      break;
-
-    default:
-      break;
-  }
+    _buttonStateLast = buttonState;
 }
 
-bool MenuManager::inMenu() {
-  return currentMenu != MENU_NONE;
+bool MenuManager::isFreezeTriggered() {
+    if (_freezeTriggered) {
+        _freezeTriggered = false;
+        return true;
+    }
+    return false;
 }
 
-void MenuManager::enter() {
-    menuMode = true; 
+bool MenuManager::isInCalibration() {
+    return _state == MENU_CAL_LO || _state == MENU_CAL_HI;
+}
+
+MenuState MenuManager::getState() {
+    return _state;
+}
+
+bool MenuManager::isLOConfirmed() {
+    return _loConfirmed;
+}
+
+bool MenuManager::isHIConfirmed() {
+    return _hiConfirmed;
+}
+
+bool MenuManager::isCalibrationDone() {
+    return _state == MENU_CAL_DONE;
 }

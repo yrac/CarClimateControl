@@ -1,115 +1,108 @@
 #include "ACController.h"
-#include "TempSensor.h"
-#include "TempController.h"
-#include "CompressorManager.h"
-#include "FanManager.h"
-#include "DisplayManager.h"
-#include "InputManager.h"
-#include "MenuManager.h"
-#include "CalibrationManager.h"
-#include "EEPROMManager.h"
-#include "OperationHourManager.h"
-#include "FreezerManager.h"
-#include "FastCoolingManager.h"
-#include "ErrorManager.h"
-#include "BuzzerManager.h"
+#include "PinConfig.h"
 
-TempSensor tempSensor;
-TempController tempController;
-CompressorManager compressor;
-FanManager fan;
-DisplayManager display;
-InputManager input;
-MenuManager menu;
-CalibrationManager calibration;
-EEPROMManager config;
-OperationHourManager ophr;
-FreezerManager freezer;
-FastCoolingManager fastCooling;
-ErrorManager error;
-BuzzerManager buzzer;
-
-void ACController::begin() {
-  config.begin();
-  display.begin();
-  buzzer.begin();
-  tempSensor.begin();
-  tempController.begin();
-  compressor.begin();
-  fan.begin();
-  input.begin();
-  menu.begin();
-  calibration.begin();
-  ophr.begin();
-  freezer.begin();
-  fastCooling.begin();
-  error.begin();
-
-  display.showWord("INIT");
-  delay(2000);
+ACController::ACController()
+    : tempSensor(NTC_PIN),
+      potentiometer(POT_PIN),
+      display(TM1637_CLK_PIN, TM1637_DIO_PIN),
+      buzzer(RELAY_BLOWER_CUT),
+      compressor(RELAY_COMPRESSOR),
+      fan(RELAY_BLOWER_4),
+      menu(FREEZE_BTN_PIN)
+{
+    calLo = 0;
+    calHi = 1023;
+    lastDisplayUpdate = 0;
 }
 
-void ACController::update() {
-  input.update();
+void ACController::begin() {
+    display.begin();
+    menu.begin();
+    compressor.begin();
+    fan.begin();
+    eeprom.begin();
+    hourCounter.begin();
 
-  // Tombol lama → masuk menu
-  if (input.isLongPress()) {
-    menu.enter();
-  }
+    eeprom.loadCalibration(calLo, calHi);
+    potentiometer.setCalibrationPoints(calLo, calHi);
+}
 
-  // Mode kalibrasi
-  if (menu.inCalibrationMode()) {
-    calibration.update();
-    return;
-  }
+void ACController::loop() {
+    menu.loop();
+    freezeCleaner.loop();
+    buzzer.loop();
 
-  // Update suhu
-  float actualTemp = tempSensor.read();
-  tempController.update(actualTemp);
-  float targetTemp = tempController.getTargetTemp();
+    float currentTemp = tempSensor.readTemperature();
+    float targetTemp = potentiometer.getTargetTemperature(18.0, 28.0);
 
-  // Error handling
-  error.update(actualTemp);
-  if (error.hasError()) {
-    display.showWord(error.getErrorCode());
-    buzzer.beep(BEEP_ERROR);
-    compressor.forceStop();
-    fan.setMode(FAN_OFF);
-    return;
-  }
+    // Error detection
+    if (isnan(currentTemp) || currentTemp < -10 || currentTemp > 70) {
+        state.setError(ERROR_SENSOR_FAIL);
+    } else {
+        state.setError(ERROR_NONE);
+    }
 
-  // Freeze cleaning
-  if (input.isShortPress() && !freezer.isRunning()) {
-    freezer.start();
-  }
-  freezer.update(actualTemp);
-  if (freezer.isRunning()) return;
+    // Handle freeze-cleaning trigger
+    if (menu.isFreezeTriggered()) {
+        freezeCleaner.trigger();
+        state.setFreeze(true);
+        buzzer.beep(100);
+    }
 
-  // Fast cooling logic
-  fastCooling.update(actualTemp, targetTemp);
+    // Handle calibration mode
+    if (menu.isInCalibration()) {
+        handleCalibration();
+    }
 
-  // Kompresor logic
-  bool allowCompressor = tempController.shouldCompressorRun() && !fastCooling.shouldDelayCompressor();
-  compressor.update(allowCompressor);
+    // Logic control
+    bool freeze = freezeCleaner.isActive();
+    bool fast = state.isFast();
 
-  // Fan control
-  if (fastCooling.isActive()) {
-    fan.setMode(FAN_HIGH);
-  } else if (compressor.isRunning()) {
-    fan.setMode(FAN_MEDIUM);
-  } else {
-    fan.setMode(FAN_LOW);
-  }
+    compressor.loop(currentTemp, targetTemp, freeze, fast);
+    fan.loop(compressor.getState() == COMP_ON, fast);
+    hourCounter.loop(compressor.getState() == COMP_ON);
 
-  // Operation hour tracking
-  ophr.update(compressor.isRunning());
+    updateDisplay(currentTemp);
+}
 
-  // Display
-  if (menu.inMenu()) {
-    menu.update();
-  } else if (millis() - menu.getLastPotMoveTime() < 3000) {
-    display.showTemperature(targetTemp);
-  } else {
-    display.showTemperature(actualTemp);
-  }
+void ACController::handleCalibration() {
+    switch (menu.getState()) {
+        case MENU_CAL_LO:
+            display.showStatus(DISP_LO);
+            if (menu.isLOConfirmed()) {
+                calLo = potentiometer.getRawValue();
+                buzzer.beep(100);
+            }
+            break;
+        case MENU_CAL_HI:
+            display.showStatus(DISP_HI);
+            if (menu.isHIConfirmed()) {
+                calHi = potentiometer.getRawValue();
+                buzzer.beep(100);
+            }
+            break;
+        case MENU_CAL_DONE:
+            eeprom.saveCalibration(calLo, calHi);
+            potentiometer.setCalibrationPoints(calLo, calHi);
+            display.showStatus(DISP_OK);
+            buzzer.beep(200);
+            break;
+        default: break;
+    }
+}
+
+void ACController::updateDisplay(float currentTemp) {
+    if (state.hasError()) {
+        display.showStatus(DISP_ERR);
+    } else if (state.isFreeze()) {
+        display.showStatus(DISP_FREEZE);
+    } else if (state.isFast()) {
+        display.showStatus(DISP_FAST);
+    } else {
+        // Update suhu setiap 500 ms
+        if (millis() - lastDisplayUpdate > 500) {
+            display.showTemperature(currentTemp);
+            lastDisplayUpdate = millis();
+        }
+    }
 }

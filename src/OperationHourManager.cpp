@@ -1,38 +1,34 @@
 #include "OperationHourManager.h"
-#include "EEPROMManager.h"
-#include "DisplayManager.h"
+#include <Arduino.h>
 
-extern EEPROMManager config;
-extern DisplayManager display;
+OperationHourManager::OperationHourManager() {
+    _lastOnTime = 0;
+    _totalMillis = 0;
+    _wasOn = false;
+}
 
-#define SERVICE_THRESHOLD_HOUR 500  // Misal servis tiap 500 jam
-#define LOG_INTERVAL_MS        60000 // 1 menit
+void OperationHourManager::begin() {
+    _totalMillis = 0;
+    _lastOnTime = 0;
+    _wasOn = false;
+}
 
-static unsigned long lastLog = 0;
+void OperationHourManager::loop(bool compressorOn) {
+    unsigned long now = millis();
 
-void OperationHourManager::begin() {}
-
-void OperationHourManager::update(bool compressorActive) {
-  if (!compressorActive) return;
-
-  if (millis() - lastLog >= LOG_INTERVAL_MS) {
-    lastLog = millis();
-    if (config.getConfig().opHour < 65535) {
-      config.getConfig().opHour++;
-      config.save();
+    if (compressorOn && !_wasOn) {
+        _lastOnTime = now;
+        _wasOn = true;
+    } else if (!compressorOn && _wasOn) {
+        _totalMillis += (now - _lastOnTime);
+        _wasOn = false;
     }
-  }
 }
 
-uint16_t OperationHourManager::getHour() {
-  return config.getConfig().opHour;
+unsigned long OperationHourManager::getHours() {
+    return (_totalMillis + (_wasOn ? millis() - _lastOnTime : 0)) / 3600000UL;
 }
 
-void OperationHourManager::reset() {
-  config.getConfig().opHour = 0;
-  config.save();
-}
-
-bool OperationHourManager::needsService() {
-  return config.getConfig().opHour >= SERVICE_THRESHOLD_HOUR;
+unsigned long OperationHourManager::getMinutes() {
+    return (_totalMillis + (_wasOn ? millis() - _lastOnTime : 0)) / 60000UL;
 }
